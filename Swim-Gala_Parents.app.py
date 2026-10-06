@@ -213,7 +213,7 @@ def calculate_variance(achieved_sec, target_sec):
     diff = achieved_sec - target_sec
     if diff < 0: return f"✅ -{seconds_to_time(abs(diff))}" 
     elif diff > 0: return f"🔺 +{seconds_to_time(abs(diff))}" 
-    else: return f"⏸️ 0.00"
+    else: return f"⏸️️ 0.00"
 
 def get_target_analysis(row, target_df, has_targets):
     ach_sec = time_to_seconds(row.get('Achieved Time'))
@@ -234,7 +234,7 @@ def get_target_analysis(row, target_df, has_targets):
 
     if ach_sec is not None:
         res = []
-        ent_ach_var = calculate_variance(achieved_sec, ent_sec) if ent_sec else ""
+        ent_ach_var = calculate_variance(ach_sec, ent_sec) if ent_sec else ""
         if ent_ach_var and ent_ach_var != "N/A": res.append(f"PB: {ent_ach_var}")
         
         if has_targets:
