@@ -146,6 +146,10 @@ def safe_int(val, default=-1):
     try: return int(float(val))
     except: return default
 
+def get_event_num(event_str):
+    m = re.search(r'Event\s+(\d+)', str(event_str), re.IGNORECASE)
+    return int(m.group(1)) if m else 9999
+
 def extract_gender(event_str):
     e_lower = str(event_str).lower()
     if 'female' in e_lower or 'girl' in e_lower or 'women' in e_lower: return 'F'
@@ -230,7 +234,7 @@ def get_target_analysis(row, target_df, has_targets):
 
     if ach_sec is not None:
         res = []
-        ent_ach_var = calculate_variance(ach_sec, ent_sec) if ent_sec else ""
+        ent_ach_var = calculate_variance(achieved_sec, ent_sec) if ent_sec else ""
         if ent_ach_var and ent_ach_var != "N/A": res.append(f"PB: {ent_ach_var}")
         
         if has_targets:
@@ -326,7 +330,7 @@ selected_swimmer = st.selectbox("🔍 Search for a Swimmer:", [""] + swimmer_lis
 if selected_swimmer:
     swim_df = df[df["Swimmer"] == selected_swimmer].copy()
     
-    # Sort chronologically by Session, Event, Heat, Lane
+    # Sort chronologically by Session, Event Number, Heat, Lane
     swim_df["_evt_num"] = swim_df["Event"].apply(get_event_num)
     swim_df["_sort_heat"] = pd.to_numeric(swim_df["Heat"], errors='coerce').fillna(9999)
     swim_df["_sort_lane"] = pd.to_numeric(swim_df["Lane"], errors='coerce').fillna(9999)
