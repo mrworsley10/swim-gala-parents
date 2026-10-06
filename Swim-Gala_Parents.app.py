@@ -326,10 +326,11 @@ selected_swimmer = st.selectbox("🔍 Search for a Swimmer:", [""] + swimmer_lis
 if selected_swimmer:
     swim_df = df[df["Swimmer"] == selected_swimmer].copy()
     
-    # Sort chronologically by Session, Heat, Lane
+    # Sort chronologically by Session, Event, Heat, Lane
+    swim_df["_evt_num"] = swim_df["Event"].apply(get_event_num)
     swim_df["_sort_heat"] = pd.to_numeric(swim_df["Heat"], errors='coerce').fillna(9999)
     swim_df["_sort_lane"] = pd.to_numeric(swim_df["Lane"], errors='coerce').fillna(9999)
-    swim_df = swim_df.sort_values(by=["Session", "_sort_heat", "_sort_lane"])
+    swim_df = swim_df.sort_values(by=["Session", "_evt_num", "_sort_heat", "_sort_lane"])
     
     total_races = len(swim_df)
     done_races = len(swim_df[swim_df["Achieved Time"] != ""])
