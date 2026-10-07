@@ -113,8 +113,8 @@ def get_target_analysis(row, target_df, has_targets):
 # --- CLOUD FETCHING ---
 def fetch_room_data(pin):
     try:
-        response = supabase.table("live_gala_data").select("*").eq("room_pin", str(pin)).limit(10000).execute()
-        if response.data: return pd.DataFrame(response.data).rename(columns={"session": "Session", "swimmer": "Swimmer", "age": "Age", "event": "Event", "heat": "Heat", "lane": "Lane", "entry_time": "Entry Time", "achieved_time": "Achieved Time"})
+        response = supabase.table("live_gala_data").select("*").eq("room_pin", str(pin)).execute()
+        if response.data: return pd.DataFrame(response.data).rename(columns={"session": "Session", "swimmer": "Swimmer", "age": "Age", "event": "Event", "heat": "Heat", "lane": "Lane", "entry_time": "Entry Time", "achieved_time": "Achieved Time", "official_placement": "Placement"})
     except: pass
     return pd.DataFrame()
 
@@ -171,10 +171,13 @@ if selected_swimmer:
         is_completed = bool(achieved and achieved.lower() not in ["none", "nan"])
         clean_evt = extract_standard_event(row["Event"]) or str(row["Event"]).split(" - ")[0]
         
+        placement_badge = row.get("Placement", "")
+        badge_html = f"<span style='font-weight: 800; font-size: 1.1rem; color: #facc15;'>{placement_badge}</span>" if placement_badge else ""
+
         st.markdown(f"""
         <div class="race-card {'completed' if is_completed else 'pending'}">
             <div class="race-top-row">
-                <div class="race-event"><span>{clean_evt}</span></div>
+                <div class="race-event"><span>{clean_evt}</span> {badge_html}</div>
                 <div class="race-heat-lane">Sess {row["Session"]} | H {row["Heat"]} | L {row["Lane"]}</div>
             </div>
             <div class="race-times-grid">
