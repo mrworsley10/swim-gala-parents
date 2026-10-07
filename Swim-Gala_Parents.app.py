@@ -213,27 +213,19 @@ if room_pin:
             placement_badge = row.get("Placement", "")
             badge_html = f"<span style='font-weight: 800; font-size: 1.1rem; color: #facc15;'>{placement_badge}</span>" if placement_badge and str(placement_badge).lower() not in ["none", "nan", ""] else ""
 
+            # Flattened HTML to prevent markdown code block rendering
             st.markdown(f"""
-            <div class="race-card {'completed' if is_completed else 'pending'}">
-                <div class="race-top-row">
-                    <div class="race-event-title-group">
-                        <span class="race-event">{clean_evt}</span>
-                        {badge_html}
-                    </div>
-                    <div class="race-heat-lane">Sess {row.get("Session", "-")} | H {row.get("Heat", "-")} | L {row.get("Lane", "-")}</div>
-                </div>
-                <div class="race-times-grid">
-                    <div class="time-box">
-                        <div class="time-label">Entry Time</div>
-                        <div class="time-value val-entry">{row.get("Entry Time", "NT")}</div>
-                    </div>
-                    <div class="time-box">
-                        <div class="time-label">Achieved Time</div>
-                        <div class="time-value {time_class}">{display_time}</div>
-                    </div>
-                </div>
-                <div class="race-analysis">{get_target_analysis(row, target_df, has_targets)}</div>
-            </div>
+<div class="race-card {'completed' if is_completed else 'pending'}">
+<div class="race-top-row">
+<div class="race-event-title-group"><span class="race-event">{clean_evt}</span>{badge_html}</div>
+<div class="race-heat-lane">Sess {row.get("Session", "-")} | H {row.get("Heat", "-")} | L {row.get("Lane", "-")}</div>
+</div>
+<div class="race-times-grid">
+<div class="time-box"><div class="time-label">Entry Time</div><div class="time-value val-entry">{row.get("Entry Time", "NT")}</div></div>
+<div class="time-box"><div class="time-label">Achieved Time</div><div class="time-value {time_class}">{display_time}</div></div>
+</div>
+<div class="race-analysis">{get_target_analysis(row, target_df, has_targets)}</div>
+</div>
             """, unsafe_allow_html=True)
             
         if st.button("🔄 Refresh Live Data"):
