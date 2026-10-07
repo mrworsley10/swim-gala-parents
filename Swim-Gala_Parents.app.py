@@ -2,9 +2,14 @@ import streamlit as st
 import pandas as pd
 from supabase import create_client, Client
 import re
+from streamlit_autorefresh import st_autorefresh
 
 # --- PAGE SETUP ---
 st.set_page_config(page_title="Live Gala Tracker", page_icon="🏊", layout="centered")
+
+# --- AUTO REFRESH ---
+# Silently reloads the app every 15 seconds (15000 ms) in the background
+st_autorefresh(interval=15000, limit=None, key="gala_refresh")
 
 # --- SUPABASE CONNECTION ---
 @st.cache_resource
@@ -162,8 +167,8 @@ room_pin = st.text_input("Enter Gala PIN provided by Team Manager:", type="passw
 
 if room_pin:
     # 3. Fetch Live Data
-    with st.spinner("Connecting to poolside..."):
-        res = supabase.table("live_gala_data").select("*").eq("room_pin", str(room_pin)).execute()
+    # Removed the st.spinner here so the 15-second refresh doesn't make the screen flash every time
+    res = supabase.table("live_gala_data").select("*").eq("room_pin", str(room_pin)).execute()
         
     if not res.data:
         st.warning("No data found for this PIN. Check with your Team Manager.")
@@ -243,5 +248,6 @@ if room_pin:
 </div>
             """, unsafe_allow_html=True)
             
-        if st.button("🔄 Refresh Live Data"):
+        # I have left the manual button here just in case someone has bad signal and wants to force a refresh instantly
+        if st.button("🔄 Force Refresh"):
             st.rerun()
