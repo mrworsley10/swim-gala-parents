@@ -36,9 +36,12 @@ st.markdown("""
     .race-heat-lane { color: #94a3b8; font-size: 0.85rem; font-weight: 600; }
     
     .race-times-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .time-box { background: #0f172a; padding: 10px; border-radius: 8px; text-align: center; }
+    .time-box { background: #0f172a; padding: 10px; border-radius: 8px; text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center; }
     .time-label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; font-weight: 700; margin-bottom: 4px; }
     .time-value { font-size: 1.2rem; font-weight: 900; }
+    
+    /* PB Pill specifically designed for Mobile */
+    .pb-pill { background-color: #166534; color: #4ade80; font-size: 0.75rem; font-weight: 800; padding: 3px 8px; border-radius: 12px; margin-top: 6px; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
     
     .val-entry { color: #94a3b8; }
     .val-achieved { color: #4ade80; } 
@@ -58,7 +61,6 @@ def extract_standard_event(event_str):
     t = t.replace('individual medley', 'im').replace('ind medley', 'im').replace('ind. medley', 'im')
     t = t.replace('individual', 'im')
     
-    # Strictly lock the regex to only pull numbers followed by actual swimming strokes
     m = re.search(r'(\d+)\s*m?\s*(free|back|breast|fly|im)', t)
     if m:
         dist = m.group(1)
@@ -66,7 +68,6 @@ def extract_standard_event(event_str):
         if stroke.lower() == 'im': stroke = "IM"
         return f"{dist}m {stroke}"
     
-    # Clean fallback if it doesn't match
     clean_fallback = str(event_str).split(" - ")[0].strip()
     clean_fallback = re.sub(r'(?i)^event\s*\d+\s*', '', clean_fallback)
     return clean_fallback.title()
@@ -185,29 +186,39 @@ if room_pin:
     if selected_swimmer != "-- Select --":
         swim_df = live_df[live_df["Swimmer"] == selected_swimmer].copy()
         
-        # Extract the Event Number for perfect chronological sorting
         def get_event_num(e_str):
             m = re.search(r'\d+', str(e_str))
             return int(m.group()) if m else 999
             
         swim_df["_event_num"] = swim_df["Event"].apply(get_event_num)
-        
-        # Sort by Session -> Event Number -> Heat -> Lane
         swim_df = swim_df.sort_values(by=["Session", "_event_num", "Heat", "Lane"])
 
         st.markdown(f"### Live Races for {selected_swimmer}")
         
         # 5. Render the Dashboard Cards
         for _, row in swim_df.iterrows():
-            achieved = str(row.get("Achieved Time", "")).strip()
-            is_completed = bool(achieved and achieved.lower() not in ["none", "nan", ""])
+            entry_str = str(row.get("Entry Time", "NT")).strip()
+            achieved_str = str(row.get("Achieved Time", "")).strip()
+            is_completed = bool(achieved_str and achieved_str.lower() not in ["none", "nan", ""])
             clean_evt = extract_standard_event(row.get("Event", ""))
             
             is_marshalled = row.get("in_marshalling", False) 
             
+            pb_badge_html = ""
+            
             if is_completed:
-                display_time = achieved
+                display_time = achieved_str
                 time_class = "val-achieved"
+                
+                # Calculate Time Drop for PB Pill
+                entry_sec = time_to_seconds(entry_str)
+                achieved_sec = time_to_seconds(achieved_str)
+                
+                if entry_sec and achieved_sec and achieved_sec < entry_sec:
+                    drop = entry_sec - achieved_sec
+                    drop_str = f"-{drop:.2f}s" if drop < 60 else f"-{seconds_to_time(drop)}"
+                    pb_badge_html = f"<div class='pb-pill'>🌟 PB ({drop_str})</div>"
+                    
             elif is_marshalled:
                 display_time = "🚶‍♂️ MARSHALLING"
                 time_class = "val-pending"
@@ -225,8 +236,8 @@ if room_pin:
 <div class="race-heat-lane">Sess {row.get("Session", "-")} | H {row.get("Heat", "-")} | L {row.get("Lane", "-")}</div>
 </div>
 <div class="race-times-grid">
-<div class="time-box"><div class="time-label">Entry Time</div><div class="time-value val-entry">{row.get("Entry Time", "NT")}</div></div>
-<div class="time-box"><div class="time-label">Achieved Time</div><div class="time-value {time_class}">{display_time}</div></div>
+<div class="time-box"><div class="time-label">Entry Time</div><div class="time-value val-entry">{entry_str}</div></div>
+<div class="time-box"><div class="time-label">Achieved Time</div><div class="time-value {time_class}">{display_time}</div>{pb_badge_html}</div>
 </div>
 <div class="race-analysis">{get_target_analysis(row, target_df, has_targets)}</div>
 </div>
