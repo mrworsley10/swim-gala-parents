@@ -1,72 +1,76 @@
 import streamlit as st
 import pandas as pd
-import re
 from supabase import create_client, Client
+import re
 
 # --- PAGE SETUP ---
-st.set_page_config(page_title="Live Swimmer Tracker", page_icon="🏊", layout="centered", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Live Gala Tracker", page_icon="🏊", layout="centered")
 
-# --- CUSTOM MOBILE-FIRST CSS ---
+# --- SUPABASE CONNECTION ---
+@st.cache_resource
+def init_connection():
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
+
+try:
+    supabase = init_connection()
+except Exception as e:
+    st.error("Failed to connect to the database. Check your Streamlit secrets.")
+    st.stop()
+
+# --- CUSTOM CSS ---
 st.markdown("""
 <style>
-    #MainMenu {visibility: hidden;} header {visibility: hidden;}
     .stApp { background-color: #0f172a; color: #f8fafc; }
-    .pin-container { background: #1e293b; padding: 30px; border-radius: 15px; text-align: center; margin-top: 10vh; border-top: 4px solid #3b82f6; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); }
-    .swimmer-header { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 20px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 20px; text-align: center; }
-    .swimmer-name { font-size: 1.8rem; font-weight: 800; color: #facc15; margin-bottom: 5px; line-height: 1.2; }
-    .swimmer-stats { font-size: 0.9rem; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
-    .race-card { background-color: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 15px; border-left: 5px solid #334155; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3); }
+    .header-box { background: linear-gradient(135deg, #3b82f6 0%, #1e293b 100%); padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border-bottom: 4px solid #facc15; }
+    .header-title { font-size: 1.8rem; font-weight: 900; color: #ffffff; margin: 0; }
+    
+    .race-card { background-color: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 16px; border-left: 5px solid #334155; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3); }
     .race-card.completed { border-left-color: #4ade80; }
-    .race-card.pending { border-left-color: #facc15; }
-    .race-top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #334155; padding-bottom: 8px; flex-wrap: wrap; gap: 10px; }
-    .race-event-title-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .race-event { font-weight: 700; font-size: 1.05rem; color: #f8fafc; }
-    .race-heat-lane { font-size: 0.8rem; color: #94a3b8; background: #0f172a; padding: 4px 8px; border-radius: 6px; font-weight: bold; white-space: nowrap; }
-    .race-times-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .race-card.pending { border-left-color: #fb923c; } /* Orange for pending/marshalling */
+    
+    .race-top-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 8px; margin-bottom: 12px; }
+    .race-event-title-group { display: flex; align-items: center; gap: 10px; }
+    .race-event { font-weight: 800; font-size: 1.1rem; color: #f8fafc; }
+    .race-heat-lane { color: #94a3b8; font-size: 0.85rem; font-weight: 600; }
+    
+    .race-times-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .time-box { background: #0f172a; padding: 10px; border-radius: 8px; text-align: center; }
-    .time-label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; font-weight: 700; }
-    .time-value { font-size: 1.3rem; font-weight: 900; }
-    .val-entry { color: #cbd5e1; }
-    .val-achieved { color: #4ade80; }
-    .val-pending { color: #facc15; font-size: 1rem !important; line-height: 1.3rem; }
-    .race-analysis { background: #0f172a; padding: 10px; border-radius: 8px; font-size: 0.85rem; color: #e2e8f0; text-align: center; font-weight: 600; }
+    .time-label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; font-weight: 700; margin-bottom: 4px; }
+    .time-value { font-size: 1.2rem; font-weight: 900; }
+    
+    .val-entry { color: #94a3b8; }
+    .val-achieved { color: #4ade80; } /* Green */
+    .val-pending { color: #fb923c; } /* Orange */
+    
+    .race-analysis { margin-top: 12px; padding-top: 12px; border-top: 1px dashed #334155; text-align: center; font-size: 0.9rem; }
+    .gap-green { color: #4ade80; font-weight: bold; }
+    .gap-red { color: #f87171; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- SUPABASE ---
-@st.cache_resource
-def init_supabase() -> Client:
-    return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
-try: supabase = init_supabase()
-except Exception as e: st.error(f"Database Failed: {e}")
-
 # --- HELPER FUNCTIONS ---
-def safe_int(val, default=-1):
-    try: return int(float(val))
-    except: return default
-
-def get_event_num(event_str):
-    m = re.search(r'Event\s+(\d+)', str(event_str), re.IGNORECASE)
-    return int(m.group(1)) if m else 9999
-
-def extract_gender(event_str):
-    e_lower = str(event_str).lower()
-    return 'F' if 'female' in e_lower or 'girl' in e_lower or 'women' in e_lower else 'M'
-
 def extract_standard_event(event_str):
-    m = re.search(r'(\d+m\s+[A-Za-z]+(?:\s+IM)?)', str(event_str), re.IGNORECASE)
-    if m: return m.group(1).title().replace('Breaststroke', 'Breast').replace('Breaststrok', 'Breast').replace('Freestyle', 'Free').replace('Backstroke', 'Back').replace('Butterfly', 'Fly').replace('Ind. Medley', 'IM').replace('Ind Medley', 'IM').replace('M ', 'm ').replace(' Im', ' IM').strip()
-    return ""
+    t = str(event_str).lower()
+    t = t.replace('breaststroke', 'breast').replace('breaststrok', 'breast')
+    t = t.replace('freestyle', 'free').replace('backstroke', 'back').replace('butterfly', 'fly')
+    t = t.replace('individual medley', 'im').replace('ind medley', 'im').replace('ind. medley', 'im')
+    t = t.replace('individual', 'im')
+    
+    m = re.search(r'(\d+)\s*m?\s*([a-z]+)', t)
+    if m:
+        dist = m.group(1)
+        stroke = m.group(2).capitalize()
+        if stroke.lower() == 'im': stroke = "IM"
+        return f"{dist}m {stroke}"
+    return str(event_str).title()
 
 def time_to_seconds(t_str):
-    if not t_str or str(t_str).strip().upper() in ["N/A", "S/T", "NT", "", "-", "—", "NONE", "DQ", "DNC", "WD", "WITHDRAWN"]: return None
+    if not t_str or pd.isna(t_str) or str(t_str).strip().upper() in ["N/A", "NT", ""]: return None
     t_str = re.sub(r'[^\d:\.]', '', str(t_str).strip())
     if not t_str: return None
     try:
-        if t_str.isdigit():
-            if len(t_str) >= 5: return int(t_str[:-4]) * 60 + int(t_str[-4:-2]) + (int(t_str[-2:]) / 100.0)
-            elif len(t_str) >= 3: return int(t_str[:-2]) + (int(t_str[-2:]) / 100.0)
-            else: return float(t_str)
         parts = re.split(r'[:\.]', t_str)
         if len(parts) == 3: return float(parts[0]) * 60 + float(parts[1]) + float(parts[2].ljust(2,'0')[:2]) / 100.0
         elif len(parts) == 2:
@@ -80,137 +84,157 @@ def time_to_seconds(t_str):
 def seconds_to_time(sec):
     return "N/A" if sec is None or sec < 0 else (f"{int(sec // 60)}:{sec % 60:05.2f}" if sec >= 60 else f"{sec % 60:05.2f}")
 
-def calculate_variance(achieved_sec, target_sec):
-    if achieved_sec is None or target_sec is None: return "N/A"
-    diff = achieved_sec - target_sec
-    if diff < 0: return f"✅ -{seconds_to_time(abs(diff))}" 
-    elif diff > 0: return f"🔺 +{seconds_to_time(abs(diff))}" 
-    else: return f"⏸ 0.00"
-
 def get_target_analysis(row, target_df, has_targets):
-    ach_sec, ent_sec = time_to_seconds(row.get('Achieved Time')), time_to_seconds(row.get('Entry Time'))
-    c_sec, r_sec = None, None
-    if has_targets:
-        match = target_df[(target_df['Gender'] == extract_gender(row.get('Event', ''))) & (target_df['Age'] == safe_int(row.get('Age'), -1)) & (target_df['Event'].str.lower() == extract_standard_event(row.get('Event', '')).lower())]
-        if not match.empty: c_sec, r_sec = time_to_seconds(match.iloc[0].get('County_Time', "")), time_to_seconds(match.iloc[0].get('Regional_Time', ""))
-    if ach_sec is not None:
-        res = []
-        v = calculate_variance(ach_sec, ent_sec)
-        if v and v != "N/A": res.append(f"PB: {v}")
-        if has_targets:
-            v_c, v_r = calculate_variance(ach_sec, c_sec), calculate_variance(ach_sec, r_sec)
-            if v_c and v_c != "N/A": res.append(f"C: {v_c}")
-            if v_r and v_r != "N/A": res.append(f"R: {v_r}")
-        return " | ".join(res) if res else "Logged"
-    else:
-        if has_targets:
-            res = []
-            v_c, v_r = calculate_variance(ent_sec, c_sec), calculate_variance(ent_sec, r_sec)
-            if v_c and v_c != "N/A": res.append(f"C: {v_c}")
-            if v_r and v_r != "N/A": res.append(f"R: {v_r}")
-            return " | ".join(res) if res else "No Targets"
-        return "⏳ Awaiting Race"
-
-# --- CLOUD FETCHING ---
-def fetch_room_data(pin):
-    try:
-        response = supabase.table("live_gala_data").select("*").eq("room_pin", str(pin)).execute()
-        if response.data: return pd.DataFrame(response.data).rename(columns={"session": "Session", "swimmer": "Swimmer", "age": "Age", "event": "Event", "heat": "Heat", "lane": "Lane", "entry_time": "Entry Time", "achieved_time": "Achieved Time", "official_placement": "Placement"})
-    except: pass
-    return pd.DataFrame()
-
-def fetch_room_targets(pin):
-    try:
-        res = supabase.table("target_times").select("*").eq("room_pin", str(pin)).execute()
-        if res.data: return pd.DataFrame(res.data).rename(columns={"gender": "Gender", "age": "Age", "event": "Event", "county_time": "County_Time", "regional_time": "Regional_Time"})
-    except: pass
-    return pd.DataFrame()
-
-if "parent_room" not in st.session_state: st.session_state["parent_room"] = None
-if "gala_df" not in st.session_state: st.session_state["gala_df"] = pd.DataFrame()
-if "target_df" not in st.session_state: st.session_state["target_df"] = pd.DataFrame()
-
-if not st.session_state["parent_room"]:
-    st.markdown("""<div class="pin-container"><h1 style="color: white; margin-bottom: 5px;">🏊 Swimmer Tracker</h1><p style="color: #94a3b8; margin-bottom: 25px;">Enter the 4-digit PIN provided by your coach.</p></div>""", unsafe_allow_html=True)
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c2:
-        join_pin = st.text_input("Room PIN", max_chars=4, placeholder="e.g. 1234", label_visibility="collapsed")
-        if st.button("Access Live Results", use_container_width=True, type="primary") and join_pin:
-            with st.spinner("Finding Room..."):
-                df = fetch_room_data(join_pin)
-                if not df.empty:
-                    st.session_state["parent_room"], st.session_state["gala_df"], st.session_state["target_df"] = join_pin, df, fetch_room_targets(join_pin)
-                    st.rerun()
-                else: st.error("Invalid PIN or empty room.")
-    st.stop()
-
-# --- DASHBOARD ---
-df, target_df = st.session_state["gala_df"], st.session_state["target_df"]
-has_targets = not target_df.empty
-
-cA, cB = st.columns([3, 1])
-with cA: st.markdown(f"<span style='color: #4ade80; font-weight: bold;'>🟢 Connected (Room {st.session_state['parent_room']})</span>", unsafe_allow_html=True)
-with cB:
-    if st.button("🔄 Refresh", use_container_width=True):
-        st.session_state["gala_df"], st.session_state["target_df"] = fetch_room_data(st.session_state["parent_room"]), fetch_room_targets(st.session_state["parent_room"])
-        st.rerun()
-
-st.divider()
-selected_swimmer = st.selectbox("🔍 Search for a Swimmer:", [""] + sorted(df["Swimmer"].unique()))
-
-if selected_swimmer:
-    swim_df = df[df["Swimmer"] == selected_swimmer].copy()
-    swim_df["_evt_num"] = swim_df["Event"].apply(get_event_num)
-    swim_df["_sort_heat"] = pd.to_numeric(swim_df["Heat"], errors='coerce').fillna(9999)
-    swim_df["_sort_lane"] = pd.to_numeric(swim_df["Lane"], errors='coerce').fillna(9999)
-    swim_df = swim_df.sort_values(by=["Session", "_evt_num", "_sort_heat", "_sort_lane"])
+    if not has_targets: return ""
     
-    st.markdown(f"""<div class="swimmer-header"><div class="swimmer-name">{selected_swimmer}</div><div class="swimmer-stats">Age {swim_df.iloc[0].get('Age', 'N/A')} • {len(swim_df[swim_df['Achieved Time'] != ""])} of {len(swim_df)} Races Completed</div></div>""", unsafe_allow_html=True)
+    achieved_str = str(row.get("Achieved Time", "")).strip()
+    if not achieved_str or achieved_str.lower() in ["none", "nan", ""]: return ""
+    
+    pb_sec = time_to_seconds(achieved_str)
+    if not pb_sec: return ""
+    
+    # We attempt to find the target using event matching (Assuming age/gender are in the row or generalized)
+    evt = extract_standard_event(row["Event"])
+    gender = str(row.get("Gender", "M")).upper()
+    age = row.get("Age", 0)
+    
+    try:
+        age = int(age)
+    except:
+        return ""
 
-for _, row in swim_df.iterrows():
-        achieved = str(row["Achieved Time"]).strip()
-        is_completed = bool(achieved and achieved.lower() not in ["none", "nan", ""])
-        clean_evt = extract_standard_event(row["Event"]) or str(row["Event"]).split(" - ")[0]
+    if evt and "event" in target_df.columns:
+        match = target_df[
+            (target_df["gender"].str.upper() == gender) & 
+            (target_df["age"] == age) & 
+            (target_df["event"].str.lower() == evt.lower())
+        ]
         
-        # --- NEW MARSHALLING LOGIC ---
-        # NOTE: Change "in_marshalling" to match whatever you named the column in your Supabase table! 
-        # It might just be "marshalled" depending on how you set it up.
-        is_marshalled = row.get("in_marshalling", False) 
+        if not match.empty:
+            c_val = match.iloc[0].get("county_time")
+            r_val = match.iloc[0].get("regional_time")
+            
+            c_sec = time_to_seconds(str(c_val)) if pd.notna(c_val) else None
+            r_sec = time_to_seconds(str(r_val)) if pd.notna(r_val) else None
+            
+            if r_sec and pb_sec <= r_sec:
+                return "<span class='gap-green'>🏆 Regional Time Achieved!</span>"
+            elif c_sec and pb_sec <= c_sec:
+                return "<span class='gap-green'>🌟 County Time Achieved!</span>"
+            elif c_sec:
+                diff = pb_sec - c_sec
+                return f"<span class='gap-red'>Missed County by {seconds_to_time(diff)}</span>"
+    return ""
+
+# --- APP UI & LOGIC ---
+
+st.markdown("""
+<div class="header-box">
+    <div class="header-title">📲 Parent Live Gala Tracker</div>
+</div>
+""", unsafe_allow_html=True)
+
+# 1. Load Targets
+try:
+    target_df = pd.read_csv("target_times.csv")
+    cols = {str(c).strip().lower(): c for c in target_df.columns}
+    rename_map = {}
+    for c_lower, c_orig in cols.items():
+        if 'county' in c_lower: rename_map[c_orig] = 'county_time'
+        elif 'region' in c_lower: rename_map[c_orig] = 'regional_time'
+        elif 'event' in c_lower: rename_map[c_orig] = 'event'
+        elif 'age' in c_lower: rename_map[c_orig] = 'age'
+        elif 'gender' in c_lower or 'sex' in c_lower: rename_map[c_orig] = 'gender'
+    target_df.rename(columns=rename_map, inplace=True)
+    if "event" in target_df.columns: target_df["event"] = target_df["event"].apply(extract_standard_event)
+    has_targets = True
+except:
+    has_targets = False
+    target_df = pd.DataFrame()
+
+# 2. Login / PIN
+room_pin = st.text_input("Enter Gala PIN provided by Team Manager:", type="password")
+
+if room_pin:
+    # 3. Fetch Live Data
+    with st.spinner("Connecting to poolside..."):
+        res = supabase.table("live_gala_data").select("*").eq("room_pin", str(room_pin)).execute()
         
-        if is_completed:
-            display_time = achieved
-            time_class = "val-achieved"
-        elif is_marshalled:
-            display_time = "🚶‍♂️ MARSHALLING"
-            time_class = "val-pending"
-        else:
-            display_time = "WAITING"
-            time_class = "val-entry"
-        # -----------------------------
+    if not res.data:
+        st.warning("No data found for this PIN. Check with your Team Manager.")
+        st.stop()
+        
+    live_df = pd.DataFrame(res.data)
+    
+    # Map Supabase columns to our display names
+    col_mapping = {
+        "event": "Event", "session": "Session", "heat": "Heat", 
+        "lane": "Lane", "swimmer": "Swimmer", "entry_time": "Entry Time", 
+        "achieved_time": "Achieved Time", "placement": "Placement",
+        "age": "Age", "gender": "Gender"
+    }
+    # We intentionally leave 'in_marshalling' as is, so we can check it cleanly
+    live_df.rename(columns={k: v for k, v in col_mapping.items() if k in live_df.columns}, inplace=True)
+    
+    # 4. Select Swimmer
+    swimmers = sorted(live_df["Swimmer"].dropna().unique().tolist())
+    selected_swimmer = st.selectbox("Select Swimmer", ["-- Select --"] + swimmers)
+    
+    if selected_swimmer != "-- Select --":
+        swim_df = live_df[live_df["Swimmer"] == selected_swimmer].copy()
+        
+        # Sort by session and heat so the races appear in chronological order
+        if "Session" in swim_df.columns and "Heat" in swim_df.columns:
+            swim_df = swim_df.sort_values(by=["Session", "Heat", "Lane"])
 
-        placement_badge = row.get("Placement", "")
-        badge_html = f"<span style='font-weight: 800; font-size: 1.1rem; color: #facc15;'>{placement_badge}</span>" if placement_badge else ""
+        st.markdown(f"### Live Races for {selected_swimmer}")
+        
+        # 5. Render the Dashboard Cards
+        for _, row in swim_df.iterrows():
+            achieved = str(row.get("Achieved Time", "")).strip()
+            is_completed = bool(achieved and achieved.lower() not in ["none", "nan", ""])
+            clean_evt = extract_standard_event(row.get("Event", "")) or str(row.get("Event", "")).split(" - ")[0]
+            
+            # --- THE MARSHALLING LOGIC ---
+            # Looks directly at your exact Supabase column name
+            is_marshalled = row.get("in_marshalling", False) 
+            
+            if is_completed:
+                display_time = achieved
+                time_class = "val-achieved"
+            elif is_marshalled:
+                display_time = "🚶‍♂️ MARSHALLING"
+                time_class = "val-pending"
+            else:
+                display_time = "WAITING"
+                time_class = "val-entry"
+            # -----------------------------
 
-        st.markdown(f"""
-        <div class="race-card {'completed' if is_completed else 'pending'}">
-            <div class="race-top-row">
-                <div class="race-event-title-group">
-                    <span class="race-event">{clean_evt}</span>
-                    {badge_html}
+            placement_badge = row.get("Placement", "")
+            badge_html = f"<span style='font-weight: 800; font-size: 1.1rem; color: #facc15;'>{placement_badge}</span>" if placement_badge and str(placement_badge).lower() not in ["none", "nan", ""] else ""
+
+            st.markdown(f"""
+            <div class="race-card {'completed' if is_completed else 'pending'}">
+                <div class="race-top-row">
+                    <div class="race-event-title-group">
+                        <span class="race-event">{clean_evt}</span>
+                        {badge_html}
+                    </div>
+                    <div class="race-heat-lane">Sess {row.get("Session", "-")} | H {row.get("Heat", "-")} | L {row.get("Lane", "-")}</div>
                 </div>
-                <div class="race-heat-lane">Sess {row["Session"]} | H {row["Heat"]} | L {row["Lane"]}</div>
+                <div class="race-times-grid">
+                    <div class="time-box">
+                        <div class="time-label">Entry Time</div>
+                        <div class="time-value val-entry">{row.get("Entry Time", "NT")}</div>
+                    </div>
+                    <div class="time-box">
+                        <div class="time-label">Achieved Time</div>
+                        <div class="time-value {time_class}">{display_time}</div>
+                    </div>
+                </div>
+                <div class="race-analysis">{get_target_analysis(row, target_df, has_targets)}</div>
             </div>
-            <div class="race-times-grid">
-                <div class="time-box"><div class="time-label">Entry Time</div><div class="time-value val-entry">{row["Entry Time"]}</div></div>
-                <div class="time-box"><div class="time-label">Achieved Time</div><div class="time-value {time_class}">{display_time}</div></div>
-            </div>
-            <div class="race-analysis">{get_target_analysis(row, target_df, has_targets)}</div>
-        </div>
-        """, unsafe_allow_html=True)
-else: st.info("👆 Tap the search bar above to find your swimmer's live report card.")
-
-st.markdown("<br><br>", unsafe_allow_html=True)
-if st.button("🚪 Leave Room", type="secondary"):
-    st.session_state["parent_room"] = None
-    st.session_state["gala_df"] = pd.DataFrame()
-    st.rerun()
+            """, unsafe_allow_html=True)
+            
+        if st.button("🔄 Refresh Live Data"):
+            st.rerun()
