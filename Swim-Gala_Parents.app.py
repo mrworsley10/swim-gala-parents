@@ -1,11 +1,6 @@
 import streamlit as st
 import pandas as pd
 import re
-import requests
-from bs4 import BeautifulSoup
-from urllib.parse import urljoin
-import urllib3
-from datetime import datetime
 from supabase import create_client, Client
 
 # --- PAGE SETUP ---
@@ -115,49 +110,10 @@ def get_target_analysis(row, target_df, has_targets):
             return " | ".join(res) if res else "No Targets"
         return "⏳ Awaiting Race"
 
-# --- WEB SCRAPER FOR OFFICIAL MEDALS ---
-def fetch_official_medals(gala_url, swimmer_name):
-    if not gala_url: return {}
-    medals = {}
-    try:
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        # Use robust headers to bypass server 406 blocks
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-        }
-        soup = BeautifulSoup(requests.get(gala_url, headers=headers, verify=False, timeout=10).text, 'html.parser')
-        
-        links = [urljoin(gala_url, a['href']) for a in soup.find_all('a', href=True) if 'event' in a['href'].lower() or re.match(r'^\d+\.htm', a['href'])]
-        for f in soup.find_all(['frame', 'iframe']):
-            if f.get('src'):
-                fsoup = BeautifulSoup(requests.get(urljoin(gala_url, f.get('src')), headers=headers, verify=False, timeout=5).text, 'html.parser')
-                links.extend([urljoin(gala_url, a['href']) for a in fsoup.find_all('a', href=True)])
-
-        lname = swimmer_name.split()[-1].lower()
-        for link in set(links):
-            try:
-                psoup = BeautifulSoup(requests.get(link, headers=headers, verify=False, timeout=3).text, 'html.parser')
-                hdr = psoup.find(['h1', 'h2', 'h3', 'h4'])
-                clean_evt = extract_standard_event(hdr.get_text(strip=True)) if hdr else ""
-                if not clean_evt: continue
-                
-                for tr in psoup.find_all('tr'):
-                    if lname in tr.get_text(separator=" ", strip=True).lower():
-                        cells = [td.get_text(strip=True) for td in tr.find_all(['td', 'th'])]
-                        if cells and cells[0].isdigit():
-                            place = int(cells[0])
-                            if place == 1: medals[clean_evt] = "🥇 1st"
-                            elif place == 2: medals[clean_evt] = "🥈 2nd"
-                            elif place == 3: medals[clean_evt] = "🥉 3rd"
-            except: continue
-    except: pass
-    return medals
-
 # --- CLOUD FETCHING ---
 def fetch_room_data(pin):
     try:
-        response = supabase.table("live_gala_data").select("*").eq("room_pin", str(pin)).execute()
+        response = supabase.table("live_gala_data").select("*").eq("room_pin", str(pin)).limit(10000).execute()
         if response.data: return pd.DataFrame(response.data).rename(columns={"session": "Session", "swimmer": "Swimmer", "age": "Age", "event": "Event", "heat": "Heat", "lane": "Lane", "entry_time": "Entry Time", "achieved_time": "Achieved Time"})
     except: pass
     return pd.DataFrame()
@@ -208,22 +164,17 @@ if selected_swimmer:
     swim_df["_sort_lane"] = pd.to_numeric(swim_df["Lane"], errors='coerce').fillna(9999)
     swim_df = swim_df.sort_values(by=["Session", "_evt_num", "_sort_heat", "_sort_lane"])
     
-    room_url = swim_df.iloc[0].get("gala_url", "")
-    with st.spinner("Checking official placements..."):
-        swimmer_medals = fetch_official_medals(room_url, selected_swimmer)
-    
     st.markdown(f"""<div class="swimmer-header"><div class="swimmer-name">{selected_swimmer}</div><div class="swimmer-stats">Age {swim_df.iloc[0].get('Age', 'N/A')} • {len(swim_df[swim_df['Achieved Time'] != ""])} of {len(swim_df)} Races Completed</div></div>""", unsafe_allow_html=True)
 
     for _, row in swim_df.iterrows():
         achieved = str(row["Achieved Time"]).strip()
         is_completed = bool(achieved and achieved.lower() not in ["none", "nan"])
         clean_evt = extract_standard_event(row["Event"]) or str(row["Event"]).split(" - ")[0]
-        medal_badge = f"<span style='font-size: 1.2rem; color: white;'>{swimmer_medals[clean_evt]}</span>" if clean_evt in swimmer_medals else ""
         
         st.markdown(f"""
         <div class="race-card {'completed' if is_completed else 'pending'}">
             <div class="race-top-row">
-                <div class="race-event"><span>{clean_evt}</span> {medal_badge}</div>
+                <div class="race-event"><span>{clean_evt}</span></div>
                 <div class="race-heat-lane">Sess {row["Session"]} | H {row["Heat"]} | L {row["Lane"]}</div>
             </div>
             <div class="race-times-grid">
