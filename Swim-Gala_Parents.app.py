@@ -167,11 +167,27 @@ if selected_swimmer:
     
     st.markdown(f"""<div class="swimmer-header"><div class="swimmer-name">{selected_swimmer}</div><div class="swimmer-stats">Age {swim_df.iloc[0].get('Age', 'N/A')} • {len(swim_df[swim_df['Achieved Time'] != ""])} of {len(swim_df)} Races Completed</div></div>""", unsafe_allow_html=True)
 
-    for _, row in swim_df.iterrows():
+for _, row in swim_df.iterrows():
         achieved = str(row["Achieved Time"]).strip()
-        is_completed = bool(achieved and achieved.lower() not in ["none", "nan"])
+        is_completed = bool(achieved and achieved.lower() not in ["none", "nan", ""])
         clean_evt = extract_standard_event(row["Event"]) or str(row["Event"]).split(" - ")[0]
         
+        # --- NEW MARSHALLING LOGIC ---
+        # NOTE: Change "in_marshalling" to match whatever you named the column in your Supabase table! 
+        # It might just be "marshalled" depending on how you set it up.
+        is_marshalled = row.get("in_marshalling", False) 
+        
+        if is_completed:
+            display_time = achieved
+            time_class = "val-achieved"
+        elif is_marshalled:
+            display_time = "🚶‍♂️ MARSHALLING"
+            time_class = "val-pending"
+        else:
+            display_time = "WAITING"
+            time_class = "val-entry"
+        # -----------------------------
+
         placement_badge = row.get("Placement", "")
         badge_html = f"<span style='font-weight: 800; font-size: 1.1rem; color: #facc15;'>{placement_badge}</span>" if placement_badge else ""
 
@@ -186,7 +202,7 @@ if selected_swimmer:
             </div>
             <div class="race-times-grid">
                 <div class="time-box"><div class="time-label">Entry Time</div><div class="time-value val-entry">{row["Entry Time"]}</div></div>
-                <div class="time-box"><div class="time-label">Achieved Time</div><div class="time-value {'val-achieved' if is_completed else 'val-pending'}">{achieved if is_completed else 'WAITING'}</div></div>
+                <div class="time-box"><div class="time-label">Achieved Time</div><div class="time-value {time_class}">{display_time}</div></div>
             </div>
             <div class="race-analysis">{get_target_analysis(row, target_df, has_targets)}</div>
         </div>
