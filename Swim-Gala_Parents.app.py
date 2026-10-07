@@ -121,7 +121,11 @@ def fetch_official_medals(gala_url, swimmer_name):
     medals = {}
     try:
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        headers = {'User-Agent': 'Mozilla/5.0'}
+        # Use robust headers to bypass server 406 blocks
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+        }
         soup = BeautifulSoup(requests.get(gala_url, headers=headers, verify=False, timeout=10).text, 'html.parser')
         
         links = [urljoin(gala_url, a['href']) for a in soup.find_all('a', href=True) if 'event' in a['href'].lower() or re.match(r'^\d+\.htm', a['href'])]
