@@ -18,9 +18,10 @@ st.markdown("""
     .race-card { background-color: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 15px; border-left: 5px solid #334155; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3); }
     .race-card.completed { border-left-color: #4ade80; }
     .race-card.pending { border-left-color: #facc15; }
-    .race-top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #334155; padding-bottom: 8px; }
-    .race-event { font-weight: 700; font-size: 1.05rem; color: #f8fafc; display: flex; align-items: center; justify-content: space-between; width: 100%;}
-    .race-heat-lane { font-size: 0.8rem; color: #94a3b8; background: #0f172a; padding: 4px 8px; border-radius: 6px; font-weight: bold; }
+    .race-top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #334155; padding-bottom: 8px; flex-wrap: wrap; gap: 10px; }
+    .race-event-title-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .race-event { font-weight: 700; font-size: 1.05rem; color: #f8fafc; }
+    .race-heat-lane { font-size: 0.8rem; color: #94a3b8; background: #0f172a; padding: 4px 8px; border-radius: 6px; font-weight: bold; white-space: nowrap; }
     .race-times-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
     .time-box { background: #0f172a; padding: 10px; border-radius: 8px; text-align: center; }
     .time-label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; font-weight: 700; }
@@ -177,7 +178,10 @@ if selected_swimmer:
         st.markdown(f"""
         <div class="race-card {'completed' if is_completed else 'pending'}">
             <div class="race-top-row">
-                <div class="race-event"><span>{clean_evt}</span> {badge_html}</div>
+                <div class="race-event-title-group">
+                    <span class="race-event">{clean_evt}</span>
+                    {badge_html}
+                </div>
                 <div class="race-heat-lane">Sess {row["Session"]} | H {row["Heat"]} | L {row["Lane"]}</div>
             </div>
             <div class="race-times-grid">
