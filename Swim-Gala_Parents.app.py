@@ -28,7 +28,7 @@ st.markdown("""
     
     .race-card { background-color: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 16px; border-left: 5px solid #334155; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3); }
     .race-card.completed { border-left-color: #4ade80; }
-    .race-card.pending { border-left-color: #fb923c; } /* Orange for pending/marshalling */
+    .race-card.pending { border-left-color: #fb923c; } 
     
     .race-top-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 8px; margin-bottom: 12px; }
     .race-event-title-group { display: flex; align-items: center; gap: 10px; }
@@ -41,8 +41,8 @@ st.markdown("""
     .time-value { font-size: 1.2rem; font-weight: 900; }
     
     .val-entry { color: #94a3b8; }
-    .val-achieved { color: #4ade80; } /* Green */
-    .val-pending { color: #fb923c; } /* Orange */
+    .val-achieved { color: #4ade80; } 
+    .val-pending { color: #fb923c; } 
     
     .race-analysis { margin-top: 12px; padding-top: 12px; border-top: 1px dashed #334155; text-align: center; font-size: 0.9rem; }
     .gap-green { color: #4ade80; font-weight: bold; }
@@ -58,13 +58,18 @@ def extract_standard_event(event_str):
     t = t.replace('individual medley', 'im').replace('ind medley', 'im').replace('ind. medley', 'im')
     t = t.replace('individual', 'im')
     
-    m = re.search(r'(\d+)\s*m?\s*([a-z]+)', t)
+    # Strictly lock the regex to only pull numbers followed by actual swimming strokes
+    m = re.search(r'(\d+)\s*m?\s*(free|back|breast|fly|im)', t)
     if m:
         dist = m.group(1)
         stroke = m.group(2).capitalize()
         if stroke.lower() == 'im': stroke = "IM"
         return f"{dist}m {stroke}"
-    return str(event_str).title()
+    
+    # Clean fallback if it doesn't match
+    clean_fallback = str(event_str).split(" - ")[0].strip()
+    clean_fallback = re.sub(r'(?i)^event\s*\d+\s*', '', clean_fallback)
+    return clean_fallback.title()
 
 def time_to_seconds(t_str):
     if not t_str or pd.isna(t_str) or str(t_str).strip().upper() in ["N/A", "NT", ""]: return None
@@ -93,8 +98,7 @@ def get_target_analysis(row, target_df, has_targets):
     pb_sec = time_to_seconds(achieved_str)
     if not pb_sec: return ""
     
-    # We attempt to find the target using event matching (Assuming age/gender are in the row or generalized)
-    evt = extract_standard_event(row["Event"])
+    evt = extract_standard_event(row.get("Event", ""))
     gender = str(row.get("Gender", "M")).upper()
     age = row.get("Age", 0)
     
@@ -166,14 +170,12 @@ if room_pin:
         
     live_df = pd.DataFrame(res.data)
     
-    # Map Supabase columns to our display names
     col_mapping = {
         "event": "Event", "session": "Session", "heat": "Heat", 
         "lane": "Lane", "swimmer": "Swimmer", "entry_time": "Entry Time", 
         "achieved_time": "Achieved Time", "placement": "Placement",
         "age": "Age", "gender": "Gender"
     }
-    # We intentionally leave 'in_marshalling' as is, so we can check it cleanly
     live_df.rename(columns={k: v for k, v in col_mapping.items() if k in live_df.columns}, inplace=True)
     
     # 4. Select Swimmer
@@ -183,9 +185,15 @@ if room_pin:
     if selected_swimmer != "-- Select --":
         swim_df = live_df[live_df["Swimmer"] == selected_swimmer].copy()
         
-        # Sort by session and heat so the races appear in chronological order
-        if "Session" in swim_df.columns and "Heat" in swim_df.columns:
-            swim_df = swim_df.sort_values(by=["Session", "Heat", "Lane"])
+        # Extract the Event Number for perfect chronological sorting
+        def get_event_num(e_str):
+            m = re.search(r'\d+', str(e_str))
+            return int(m.group()) if m else 999
+            
+        swim_df["_event_num"] = swim_df["Event"].apply(get_event_num)
+        
+        # Sort by Session -> Event Number -> Heat -> Lane
+        swim_df = swim_df.sort_values(by=["Session", "_event_num", "Heat", "Lane"])
 
         st.markdown(f"### Live Races for {selected_swimmer}")
         
@@ -193,10 +201,8 @@ if room_pin:
         for _, row in swim_df.iterrows():
             achieved = str(row.get("Achieved Time", "")).strip()
             is_completed = bool(achieved and achieved.lower() not in ["none", "nan", ""])
-            clean_evt = extract_standard_event(row.get("Event", "")) or str(row.get("Event", "")).split(" - ")[0]
+            clean_evt = extract_standard_event(row.get("Event", ""))
             
-            # --- THE MARSHALLING LOGIC ---
-            # Looks directly at your exact Supabase column name
             is_marshalled = row.get("in_marshalling", False) 
             
             if is_completed:
@@ -208,12 +214,10 @@ if room_pin:
             else:
                 display_time = "WAITING"
                 time_class = "val-entry"
-            # -----------------------------
 
             placement_badge = row.get("Placement", "")
             badge_html = f"<span style='font-weight: 800; font-size: 1.1rem; color: #facc15;'>{placement_badge}</span>" if placement_badge and str(placement_badge).lower() not in ["none", "nan", ""] else ""
 
-            # Flattened HTML to prevent markdown code block rendering
             st.markdown(f"""
 <div class="race-card {'completed' if is_completed else 'pending'}">
 <div class="race-top-row">
