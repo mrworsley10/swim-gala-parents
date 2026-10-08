@@ -8,7 +8,6 @@ from streamlit_autorefresh import st_autorefresh
 st.set_page_config(page_title="Live Gala Tracker", page_icon="🏊", layout="centered")
 
 # --- AUTO REFRESH ---
-# Silently reloads the app every 15 seconds (15000 ms) in the background
 st_autorefresh(interval=15000, limit=None, key="gala_refresh")
 
 # --- SUPABASE CONNECTION ---
@@ -45,8 +44,10 @@ st.markdown("""
     .time-label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; font-weight: 700; margin-bottom: 4px; }
     .time-value { font-size: 1.2rem; font-weight: 900; }
     
-    /* PB Pill specifically designed for Mobile */
     .pb-pill { background-color: #166534; color: #4ade80; font-size: 0.75rem; font-weight: 800; padding: 3px 8px; border-radius: 12px; margin-top: 6px; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    
+    .tag-unofficial { color: #94a3b8; font-size: 0.65rem; text-transform: uppercase; margin-top: 6px; font-weight: 700; letter-spacing: 0.5px; }
+    .tag-official { color: #4ade80; font-size: 0.65rem; text-transform: uppercase; margin-top: 6px; font-weight: 800; letter-spacing: 0.5px; }
     
     .val-entry { color: #94a3b8; }
     .val-achieved { color: #4ade80; } 
@@ -167,7 +168,6 @@ room_pin = st.text_input("Enter Gala PIN provided by Team Manager:", type="passw
 
 if room_pin:
     # 3. Fetch Live Data
-    # Removed the st.spinner here so the 15-second refresh doesn't make the screen flash every time
     res = supabase.table("live_gala_data").select("*").eq("room_pin", str(room_pin)).execute()
         
     if not res.data:
@@ -176,6 +176,7 @@ if room_pin:
         
     live_df = pd.DataFrame(res.data)
     
+    # Updated mapping to catch 'official_placement'
     col_mapping = {
         "event": "Event", "session": "Session", "heat": "Heat", 
         "lane": "Lane", "swimmer": "Swimmer", "entry_time": "Entry Time", 
@@ -209,13 +210,23 @@ if room_pin:
             
             is_marshalled = row.get("in_marshalling", False) 
             
+            placement_str = str(row.get("Placement", "")).strip()
+            has_official_placement = bool(placement_str and placement_str.lower() not in ["none", "nan", ""])
+            
             pb_badge_html = ""
+            verification_tag = ""
             
             if is_completed:
                 display_time = achieved_str
                 time_class = "val-achieved"
                 
-                # Calculate Time Drop for PB Pill
+                # Check for Official/Unofficial Status
+                if has_official_placement:
+                    verification_tag = "<div class='tag-official'>✓ OFFICIAL</div>"
+                else:
+                    verification_tag = "<div class='tag-unofficial'>UNOFFICIAL</div>"
+                
+                # Calculate Time Drop for PB Pill (ignores "DQ" safely)
                 entry_sec = time_to_seconds(entry_str)
                 achieved_sec = time_to_seconds(achieved_str)
                 
@@ -231,8 +242,7 @@ if room_pin:
                 display_time = "WAITING"
                 time_class = "val-entry"
 
-            placement_badge = row.get("Placement", "")
-            badge_html = f"<span style='font-weight: 800; font-size: 1.1rem; color: #facc15;'>{placement_badge}</span>" if placement_badge and str(placement_badge).lower() not in ["none", "nan", ""] else ""
+            badge_html = f"<span style='font-weight: 800; font-size: 1.1rem; color: #facc15;'>{placement_str}</span>" if has_official_placement else ""
 
             st.markdown(f"""
 <div class="race-card {'completed' if is_completed else 'pending'}">
@@ -242,12 +252,11 @@ if room_pin:
 </div>
 <div class="race-times-grid">
 <div class="time-box"><div class="time-label">Entry Time</div><div class="time-value val-entry">{entry_str}</div></div>
-<div class="time-box"><div class="time-label">Achieved Time</div><div class="time-value {time_class}">{display_time}</div>{pb_badge_html}</div>
+<div class="time-box"><div class="time-label">Achieved Time</div><div class="time-value {time_class}">{display_time}</div>{verification_tag}{pb_badge_html}</div>
 </div>
 <div class="race-analysis">{get_target_analysis(row, target_df, has_targets)}</div>
 </div>
             """, unsafe_allow_html=True)
             
-        # I have left the manual button here just in case someone has bad signal and wants to force a refresh instantly
         if st.button("🔄 Force Refresh"):
             st.rerun()
