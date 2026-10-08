@@ -179,7 +179,7 @@ if room_pin:
     col_mapping = {
         "event": "Event", "session": "Session", "heat": "Heat", 
         "lane": "Lane", "swimmer": "Swimmer", "entry_time": "Entry Time", 
-        "achieved_time": "Achieved Time", "placement": "Placement",
+        "achieved_time": "Achieved Time", "official_placement": "Placement",
         "age": "Age", "gender": "Gender"
     }
     live_df.rename(columns={k: v for k, v in col_mapping.items() if k in live_df.columns}, inplace=True)
