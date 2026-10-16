@@ -184,6 +184,18 @@ if room_pin:
     if not res.data:
         st.warning("No data found for this PIN. Check with your Team Manager.")
         st.stop()
+
+# --- FETCH LIVE ANNOUNCEMENTS ---
+    announce_res = supabase.table("gala_settings").select("announcement").eq("room_pin", str(room_pin)).execute()
+    
+    if announce_res.data and announce_res.data[0].get("announcement"):
+        active_msg = announce_res.data[0]["announcement"].strip()
+        if active_msg:
+            st.markdown(f"""
+            <div style="background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%); color: #0f172a; padding: 16px; border-radius: 12px; margin-bottom: 24px; font-weight: 900; text-align: center; border-left: 8px solid #d97706; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 1.1rem;">
+                🚨 GALA UPDATE: {active_msg}
+            </div>
+            """, unsafe_allow_html=True)
         
     live_df = pd.DataFrame(res.data)
     
