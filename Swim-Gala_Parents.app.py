@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from supabase import create_client, Client
 import re
+import urllib.parse
 from streamlit_autorefresh import st_autorefresh
 
 # --- PAGE SETUP ---
@@ -56,6 +57,9 @@ st.markdown("""
     .race-analysis { margin-top: 12px; padding-top: 12px; border-top: 1px dashed #334155; text-align: center; font-size: 0.9rem; }
     .gap-green { color: #4ade80; font-weight: bold; }
     .gap-red { color: #f87171; font-weight: bold; }
+    
+    .whatsapp-btn { display: block; margin-top: 12px; background-color: #25D366; color: white !important; text-align: center; padding: 8px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 0.9rem; transition: background-color 0.2s; }
+    .whatsapp-btn:hover { background-color: #1ebc5a; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -216,12 +220,21 @@ if room_pin:
 
         st.markdown(f"### Live Races for {selected_swimmer}")
         
+        # --- TOGGLE FILTER ---
+        filter_choice = st.radio("Filter Races:", ["All", "Upcoming", "Completed"], horizontal=True)
+        
         # 5. Render the Dashboard Cards
         for _, row in swim_df.iterrows():
             entry_str = str(row.get("Entry Time", "NT")).strip()
             achieved_str = str(row.get("Achieved Time", "")).strip()
             is_completed = bool(achieved_str and achieved_str.lower() not in ["none", "nan", ""])
             clean_evt = extract_standard_event(row.get("Event", ""))
+            
+            # Apply Filter
+            if filter_choice == "Upcoming" and is_completed:
+                continue
+            if filter_choice == "Completed" and not is_completed:
+                continue
             
             is_marshalled = row.get("in_marshalling", False) 
             
@@ -230,25 +243,32 @@ if room_pin:
             
             pb_badge_html = ""
             verification_tag = ""
+            whatsapp_html = ""
             
             if is_completed:
                 display_time = achieved_str
                 time_class = "val-achieved"
                 
-                # Check for Official/Unofficial Status
                 if has_official_placement:
                     verification_tag = "<div class='tag-official'>✓ OFFICIAL</div>"
                 else:
                     verification_tag = "<div class='tag-unofficial'>UNOFFICIAL</div>"
                 
-                # Calculate Time Drop for PB Pill (ignores "DQ" safely)
                 entry_sec = time_to_seconds(entry_str)
                 achieved_sec = time_to_seconds(achieved_str)
+                is_pb = False
                 
                 if entry_sec and achieved_sec and achieved_sec < entry_sec:
                     drop = entry_sec - achieved_sec
                     drop_str = f"-{drop:.2f}s" if drop < 60 else f"-{seconds_to_time(drop)}"
                     pb_badge_html = f"<div class='pb-pill'>🌟 PB ({drop_str})</div>"
+                    is_pb = True
+                
+                # Build WhatsApp Share Link
+                share_text = f"🌟 {selected_swimmer} just swam a PB in the {clean_evt} with a time of {achieved_str}! 🏊‍♂️🚀" if is_pb else f"🏊‍♂️ {selected_swimmer} just finished the {clean_evt} with a time of {achieved_str}!"
+                encoded_text = urllib.parse.quote(share_text)
+                whatsapp_url = f"https://wa.me/?text={encoded_text}"
+                whatsapp_html = f"<a href='{whatsapp_url}' target='_blank' class='whatsapp-btn'>📱 Share to WhatsApp</a>"
                     
             elif is_marshalled:
                 display_time = "🚶‍♂️ MARSHALLING"
@@ -270,6 +290,7 @@ if room_pin:
 <div class="time-box"><div class="time-label">Achieved Time</div><div class="time-value {time_class}">{display_time}</div>{verification_tag}{pb_badge_html}</div>
 </div>
 <div class="race-analysis">{get_target_analysis(row, target_df, has_targets)}</div>
+{whatsapp_html}
 </div>
             """, unsafe_allow_html=True)
             
