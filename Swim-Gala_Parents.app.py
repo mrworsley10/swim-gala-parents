@@ -163,10 +163,17 @@ except:
     has_targets = False
     target_df = pd.DataFrame()
 
-# 2. Login / PIN
-room_pin = st.text_input("Enter Gala PIN provided by Team Manager:", type="password")
+# --- FETCH URL PARAMETERS ---
+url_pin = st.query_params.get("pin", "")
+url_swimmer = st.query_params.get("swimmer", "-- Select --")
+
+# 2. Login / PIN (Now uses URL pin as default)
+room_pin = st.text_input("Enter Gala PIN provided by Team Manager:", value=url_pin, type="password")
 
 if room_pin:
+    # Update the URL automatically when a PIN is entered
+    st.query_params["pin"] = room_pin
+
     # 3. Fetch Live Data
     res = supabase.table("live_gala_data").select("*").eq("room_pin", str(room_pin)).execute()
         
@@ -176,7 +183,6 @@ if room_pin:
         
     live_df = pd.DataFrame(res.data)
     
-    # Updated mapping to catch 'official_placement'
     col_mapping = {
         "event": "Event", "session": "Session", "heat": "Heat", 
         "lane": "Lane", "swimmer": "Swimmer", "entry_time": "Entry Time", 
@@ -187,9 +193,18 @@ if room_pin:
     
     # 4. Select Swimmer
     swimmers = sorted(live_df["Swimmer"].dropna().unique().tolist())
-    selected_swimmer = st.selectbox("Select Swimmer", ["-- Select --"] + swimmers)
+    
+    # Calculate the correct dropdown index based on the URL
+    default_index = 0
+    if url_swimmer in swimmers:
+        default_index = swimmers.index(url_swimmer) + 1
+        
+    selected_swimmer = st.selectbox("Select Swimmer", ["-- Select --"] + swimmers, index=default_index)
     
     if selected_swimmer != "-- Select --":
+        # Update the URL automatically when a swimmer is chosen
+        st.query_params["swimmer"] = selected_swimmer
+        
         swim_df = live_df[live_df["Swimmer"] == selected_swimmer].copy()
         
         def get_event_num(e_str):
