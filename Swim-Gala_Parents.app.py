@@ -219,6 +219,40 @@ if room_pin:
         swim_df = swim_df.sort_values(by=["Session", "_event_num", "Heat", "Lane"])
 
         st.markdown(f"### Live Races for {selected_swimmer}")
+
+# --- DAILY TALLY DASHBOARD ---
+        total_races = len(swim_df)
+        completed_races = 0
+        pb_count = 0
+        top3_count = 0
+
+        for _, row in swim_df.iterrows():
+            entry_str = str(row.get("Entry Time", "NT")).strip()
+            achieved_str = str(row.get("Achieved Time", "")).strip()
+            placement_str = str(row.get("Placement", "")).strip()
+
+            is_completed = bool(achieved_str and achieved_str.lower() not in ["none", "nan", ""])
+
+            if is_completed:
+                completed_races += 1
+                
+                # Check PB
+                entry_sec = time_to_seconds(entry_str)
+                achieved_sec = time_to_seconds(achieved_str)
+                if entry_sec and achieved_sec and achieved_sec < entry_sec:
+                    pb_count += 1
+                    
+                # Check Top 3
+                if placement_str in ["1", "2", "3", "1st", "2nd", "3rd", "1.0", "2.0", "3.0"]:
+                    top3_count += 1
+
+        st.markdown(f"""
+        <div style="display: flex; justify-content: space-around; background-color: #1e293b; padding: 15px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #334155;">
+            <div style="text-align: center;"><div style="font-size: 1.5rem;">🏁</div><div style="font-size: 0.8rem; font-weight: bold; color: #94a3b8; margin-top: 4px;">{completed_races} / {total_races} RACES</div></div>
+            <div style="text-align: center;"><div style="font-size: 1.5rem;">🌟</div><div style="font-size: 0.8rem; font-weight: bold; color: #4ade80; margin-top: 4px;">{pb_count} PBs</div></div>
+            <div style="text-align: center;"><div style="font-size: 1.5rem;">🥇</div><div style="font-size: 0.8rem; font-weight: bold; color: #facc15; margin-top: 4px;">{top3_count} TOP 3</div></div>
+        </div>
+        """, unsafe_allow_html=True)
         
         # --- TOGGLE FILTER ---
         filter_choice = st.radio("Filter Races:", ["All", "Upcoming", "Completed"], horizontal=True)
