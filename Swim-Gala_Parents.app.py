@@ -4,12 +4,14 @@ from supabase import create_client, Client
 import re
 import urllib.parse
 from streamlit_autorefresh import st_autorefresh
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 # --- PAGE SETUP ---
 st.set_page_config(page_title="Live Gala Tracker", page_icon="🏊", layout="centered")
 
 # --- AUTO REFRESH ---
-st_autorefresh(interval=15000, limit=None, key="gala_refresh")
+st_autorefresh(interval=30000, limit=None, key="gala_refresh")
 
 # --- SUPABASE CONNECTION ---
 @st.cache_resource
@@ -231,6 +233,7 @@ if room_pin:
         swim_df = swim_df.sort_values(by=["Session", "_event_num", "Heat", "Lane"])
 
         st.markdown(f"### Live Races for {selected_swimmer}")
+        st.caption(f"Last updated {datetime.now(ZoneInfo('Europe/London')):%H:%M:%S} · updates every 30 seconds")
 
 # --- DAILY TALLY DASHBOARD ---
         total_races = len(swim_df)
