@@ -270,6 +270,23 @@ if room_pin:
             <div style="text-align: center;"><div style="font-size: 1.5rem;">🥇</div><div style="font-size: 0.8rem; font-weight: bold; color: #facc15; margin-top: 4px;">{top3_count} TOP 3</div></div>
         </div>
         """, unsafe_allow_html=True)
+
+        # --- NEXT RACE BOX ---
+        _waiting = swim_df[swim_df["Achieved Time"].fillna("").astype(str).str.strip().str.lower().isin(["", "none", "nan"])]
+        if not _waiting.empty:
+            nr = _waiting.iloc[0]
+            _in_marshalling = str(nr.get("in_marshalling", "")).strip().lower() == "true"
+            _status = "🚶‍♂️ In marshalling now" if _in_marshalling else "⏳ Not called to marshalling yet"
+            st.markdown(f"""
+<div style="background: #1e3a8a; border: 2px solid #facc15; border-radius: 12px; padding: 14px 16px; margin-bottom: 20px; text-align: center;">
+<div style="font-size: 0.75rem; font-weight: 800; color: #facc15; letter-spacing: 1px;">NEXT RACE</div>
+<div style="font-size: 1.3rem; font-weight: 900; color: #ffffff; margin: 4px 0;">{extract_standard_event(nr.get("Event", ""))}</div>
+<div style="font-size: 0.95rem; color: #cbd5e1; font-weight: 600;">Session {nr.get("Session", "-")} · Heat {nr.get("Heat", "-")} · Lane {nr.get("Lane", "-")}</div>
+<div style="font-size: 0.9rem; color: #fb923c; font-weight: 700; margin-top: 6px;">{_status}</div>
+</div>
+            """, unsafe_allow_html=True)
+        elif total_races:
+            st.success("🎉 All races finished - well done!")
         
         # --- TOGGLE FILTER ---
         filter_choice = st.radio("Filter Races:", ["All", "Upcoming", "Completed"], horizontal=True)
