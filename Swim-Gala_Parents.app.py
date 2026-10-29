@@ -57,6 +57,7 @@ st.markdown("""
     .race-analysis { margin-top: 12px; padding-top: 12px; border-top: 1px dashed #334155; text-align: center; font-size: 0.9rem; }
     .gap-green { color: #4ade80; font-weight: bold; }
     .gap-red { color: #f87171; font-weight: bold; }
+    .gap-amber { color: #fbbf24; font-weight: bold; }
     
     .whatsapp-btn { display: block; margin-top: 12px; background-color: #25D366; color: white !important; text-align: center; padding: 8px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 0.9rem; transition: background-color 0.2s; }
     .whatsapp-btn:hover { background-color: #1ebc5a; }
@@ -138,7 +139,8 @@ def get_target_analysis(row, target_df, has_targets):
                 return "<span class='gap-green'>🌟 County Time Achieved!</span>"
             elif c_sec:
                 diff = pb_sec - c_sec
-                return f"<span class='gap-red'>Missed County by {seconds_to_time(diff)}</span>"
+                diff_str = f"{diff:.2f}s" if diff < 60 else seconds_to_time(diff)
+                return f"<span class='gap-amber'>{diff_str} off County time - getting closer!</span>"
     return ""
 
 # --- APP UI & LOGIC ---
@@ -268,6 +270,7 @@ if room_pin:
         
         # --- TOGGLE FILTER ---
         filter_choice = st.radio("Filter Races:", ["All", "Upcoming", "Completed"], horizontal=True)
+        st.caption("🟢 Finished · 🟠 Still to swim · 🌟 PB = faster than entry time · Unofficial = time logged by our coaches, Official = placing from the results")
         
         # 5. Render the Dashboard Cards
         for _, row in swim_df.iterrows():
