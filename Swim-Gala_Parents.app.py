@@ -3,6 +3,7 @@ import pandas as pd
 from supabase import create_client, Client
 import re
 import urllib.parse
+import html
 from streamlit_autorefresh import st_autorefresh
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -195,7 +196,7 @@ if room_pin:
         if active_msg:
             st.markdown(f"""
             <div style="background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%); color: #0f172a; padding: 16px; border-radius: 12px; margin-bottom: 24px; font-weight: 900; text-align: center; border-left: 8px solid #d97706; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 1.1rem;">
-                🚨 GALA UPDATE: {active_msg}
+                🚨 GALA UPDATE: {html.escape(active_msg)}
             </div>
             """, unsafe_allow_html=True)
         
@@ -280,7 +281,7 @@ if room_pin:
             st.markdown(f"""
 <div style="background: #1e3a8a; border: 2px solid #facc15; border-radius: 12px; padding: 14px 16px; margin-bottom: 20px; text-align: center;">
 <div style="font-size: 0.75rem; font-weight: 800; color: #facc15; letter-spacing: 1px;">NEXT RACE</div>
-<div style="font-size: 1.3rem; font-weight: 900; color: #ffffff; margin: 4px 0;">{extract_standard_event(nr.get("Event", ""))}</div>
+<div style="font-size: 1.3rem; font-weight: 900; color: #ffffff; margin: 4px 0;">{html.escape(extract_standard_event(nr.get("Event", "")))}</div>
 <div style="font-size: 0.95rem; color: #cbd5e1; font-weight: 600;">Session {nr.get("Session", "-")} · Heat {nr.get("Heat", "-")} · Lane {nr.get("Lane", "-")}</div>
 <div style="font-size: 0.9rem; color: #fb923c; font-weight: 700; margin-top: 6px;">{_status}</div>
 </div>
@@ -346,17 +347,17 @@ if room_pin:
                 display_time = "WAITING"
                 time_class = "val-entry"
 
-            badge_html = f"<span style='font-weight: 800; font-size: 1.1rem; color: #facc15;'>{placement_str}</span>" if has_official_placement else ""
+            badge_html = f"<span style='font-weight: 800; font-size: 1.1rem; color: #facc15;'>{html.escape(placement_str)}</span>" if has_official_placement else ""
 
             st.markdown(f"""
 <div class="race-card {'completed' if is_completed else 'pending'}">
 <div class="race-top-row">
-<div class="race-event-title-group"><span class="race-event">{clean_evt}</span>{badge_html}</div>
+<div class="race-event-title-group"><span class="race-event">{html.escape(clean_evt)}</span>{badge_html}</div>
 <div class="race-heat-lane">Sess {row.get("Session", "-")} | H {row.get("Heat", "-")} | L {row.get("Lane", "-")}</div>
 </div>
 <div class="race-times-grid">
-<div class="time-box"><div class="time-label">Entry Time</div><div class="time-value val-entry">{entry_str}</div></div>
-<div class="time-box"><div class="time-label">Achieved Time</div><div class="time-value {time_class}">{display_time}</div>{verification_tag}{pb_badge_html}</div>
+<div class="time-box"><div class="time-label">Entry Time</div><div class="time-value val-entry">{html.escape(entry_str)}</div></div>
+<div class="time-box"><div class="time-label">Achieved Time</div><div class="time-value {time_class}">{html.escape(display_time)}</div>{verification_tag}{pb_badge_html}</div>
 </div>
 <div class="race-analysis">{get_target_analysis(row, target_df, has_targets)}</div>
 {whatsapp_html}
