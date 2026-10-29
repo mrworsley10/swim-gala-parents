@@ -113,7 +113,8 @@ def get_target_analysis(row, target_df, has_targets):
     if not pb_sec: return ""
     
     evt = extract_standard_event(row.get("Event", ""))
-    gender = str(row.get("Gender", "M")).upper()
+    e_lower = str(row.get("Event", "")).lower()
+    gender = "F" if ("female" in e_lower or "girl" in e_lower or "women" in e_lower) else "M"
     age = row.get("Age", 0)
     
     try:
@@ -153,23 +154,20 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# 1. Load Targets
-try:
-    target_df = pd.read_csv("target_times.csv")
-    cols = {str(c).strip().lower(): c for c in target_df.columns}
-    rename_map = {}
-    for c_lower, c_orig in cols.items():
-        if 'county' in c_lower: rename_map[c_orig] = 'county_time'
-        elif 'region' in c_lower: rename_map[c_orig] = 'regional_time'
-        elif 'event' in c_lower: rename_map[c_orig] = 'event'
-        elif 'age' in c_lower: rename_map[c_orig] = 'age'
-        elif 'gender' in c_lower or 'sex' in c_lower: rename_map[c_orig] = 'gender'
-    target_df.rename(columns=rename_map, inplace=True)
-    if "event" in target_df.columns: target_df["event"] = target_df["event"].apply(extract_standard_event)
-    has_targets = True
-except:
-    has_targets = False
-    target_df = pd.DataFrame()
+# 1. Load Targets (the coaches' app saves these in Supabase, one set per gala room)
+@st.cache_data(ttl=300)
+def load_room_targets(pin):
+    try:
+        t_res = supabase.table("target_times").select("*").eq("room_pin", str(pin)).execute()
+        t_df = pd.DataFrame(t_res.data or [])
+    except Exception:
+        return pd.DataFrame()
+    if t_df.empty or "event" not in t_df.columns or "gender" not in t_df.columns or "age" not in t_df.columns:
+        return pd.DataFrame()
+    t_df["event"] = t_df["event"].apply(extract_standard_event)
+    t_df["gender"] = t_df["gender"].astype(str).str.strip().str.upper().str[:1].map(lambda g: "F" if g in ("F", "G", "W") else "M")
+    t_df["age"] = pd.to_numeric(t_df["age"], errors="coerce")
+    return t_df
 
 # --- FETCH URL PARAMETERS ---
 url_pin = st.query_params.get("pin", "")
@@ -202,6 +200,8 @@ if room_pin:
             """, unsafe_allow_html=True)
         
     live_df = pd.DataFrame(res.data)
+    target_df = load_room_targets(room_pin)
+    has_targets = not target_df.empty
     
     col_mapping = {
         "event": "Event", "session": "Session", "heat": "Heat", 
@@ -260,7 +260,7 @@ if room_pin:
                     pb_count += 1
                     
                 # Check Top 3
-                if placement_str in ["1", "2", "3", "1st", "2nd", "3rd", "1.0", "2.0", "3.0"]:
+                if re.sub(r'\D', '', placement_str.split('.')[0]) in ["1", "2", "3"]:
                     top3_count += 1
 
         st.markdown(f"""
